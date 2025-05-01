@@ -1,11 +1,11 @@
 //Constants
 #include <FastLED.h>
 #define NUM_CELLS 15
-#define NUM_LEDS NUM_CELLS*4
+#define NUM_LEDS NUM_CELLS * 4
 #define DATA_PIN 2
 
 #define MSPERBEAT 500
-#define LEEWAY 100
+#define LEEWAY 300
 
 //LED Strip Object
 CRGB leds[NUM_LEDS];
@@ -29,30 +29,30 @@ int defaultDeviations[] = {
 
 //Object for the Cells
 struct Cell {
-  int button; //pin for the velostat
+  int button;  //pin for the velostat
   unsigned long baselineSum;
   int baseline;
-  int ledIndex; //first index of leds
-  int reading = 0; //latest velostat reading
+  int ledIndex;     //first index of leds
+  int reading = 0;  //latest velostat reading
   int smoothedReading = 0;
   int binary = 0;
   int lastBinary = 0;
   int debouncedBinary = 0;
-  int deviation = 10; //Calculated based on the baseline
+  int deviation = 10;  //Calculated based on the baseline
   unsigned long lastDebounceTime = 0;
-  unsigned long hits[4] = {0, 0, 0, 0};
+  unsigned long hits[4] = { 0, 0, 0, 0 };
   int hitCount = 0;
   int currentPattern = 0;
   CRGB cellColor = CRGB(200, 255, 116);
 
-  uint8_t brightness = 128; //brightness value used in tapShow method
+  uint8_t brightness = 128;  //brightness value used in tapShow method
 
   //Initializes the cell
   void create(int velostatPin, int ledIndexStart) {
     button = velostatPin;
     ledIndex = ledIndexStart;
 
-    for ( int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++) {
       leds[ledIndex + i] = cellColor;
     }
   }
@@ -69,8 +69,8 @@ struct Cell {
     //The lower the baseline, the more sensitive the sensor is, so
     //the larger the threshold for an actual tap.
     deviation = map(baseline, 0, 1023, 20, 8);
-    
-    for(int i = 0; i<4; i++) {
+
+    for (int i = 0; i < 4; i++) {
       hits[i] = 0;
     }
   }
@@ -97,7 +97,7 @@ struct Cell {
       if (binary != debouncedBinary) {
         debouncedBinary = binary;
 
-        if (binary == 1) { //Its a hit
+        if (binary == 1) {  //Its a hit
           //Add to hits and shift it back
           for (int i = 0; i < 3; i++) {
             hits[i] = hits[i + 1];
@@ -128,29 +128,77 @@ struct Cell {
     }
 
     brightness = constrain(brightness, 0, 255);
-    for ( int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++) {
       leds[ledIndex + i] = cellColor;
       leds[ledIndex + i].nscale8(brightness);
     }
   }
 
   void checkRhythm() {
-    if ( hits[0] != 0 && hits[1] != 0 && hits[2] != 0 && hits[3] != 0 ) {
+    if (hits[0] != 0 && hits[1] != 0 && hits[2] != 0 && hits[3] != 0) {
       if (isPatternOne()) {
         currentPattern = 1;
-        cellColor = CRGB(0,255,0);
+        cellColor = CRGB(0, 255, 0);
       }
-      
+      else if (isPatternTwo()) {
+        currentPattern = 2;
+        cellColor = CRGB(255, 0, 0);
+      }
+      else if (isPatternThree()) {
+        currentPattern = 3;
+        cellColor = CRGB(0, 0, 200);
+      }
+      else if (isPatternFour()) {
+        currentPattern = 4;
+        cellColor = CRGB(255, 0, 200);
+      }
     }
   }
-
+  // hit 1, hit 2, hit 3, hit 4
   boolean isPatternOne() {
-    if ( (hits[1] - hits[0]) - MSPERBEAT < LEEWAY &&
-         (hits[2] - hits[1]) - MSPERBEAT < LEEWAY &&
-         (hits[3] - hits[2]) - MSPERBEAT < LEEWAY
-       ) {
+    if (
+      (hits[1] - hits[0] - MSPERBEAT < LEEWAY) && 
+      (hits[2] - hits[1] - MSPERBEAT < LEEWAY) && 
+      (hits[3] - hits[2]) - MSPERBEAT < LEEWAY) 
+    {
       return true;
-    }else {
+    } else {
+      return false;
+    }
+  }
+  // hit 1, skip 2, hit 3, skip 4
+  boolean isPatternTwo() {
+    if (
+      (hits[1] - hits[0]) - MSPERBEAT*2 < LEEWAY && 
+      (hits[2] - hits[1]) - MSPERBEAT*2 < LEEWAY && 
+      (hits[3] - hits[2]) - MSPERBEAT*2 < LEEWAY) 
+    {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  // hit 1, skip 2, hit 3, hit 4
+  boolean isPatternThree() {
+    if (
+      (hits[1] - hits[0]) - MSPERBEAT*2 < LEEWAY && 
+      (hits[2] - hits[1]) - MSPERBEAT < LEEWAY && 
+      (hits[3] - hits[2]) - MSPERBEAT < LEEWAY) 
+    {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  // hit 1, hit 2, hit 3, skip 4
+  boolean isPatternFour() {
+    if (
+      (hits[1] - hits[0]) - MSPERBEAT < LEEWAY && 
+      (hits[2] - hits[1]) - MSPERBEAT < LEEWAY && 
+      (hits[3] - hits[2]) - MSPERBEAT*2 < LEEWAY) 
+    {
+      return true;
+    } else {
       return false;
     }
   }
@@ -183,7 +231,7 @@ void loop() {
   //      leds[i] = CRGB(255, 0, 255);
   //    }
 
-  for ( int i = 0; i < NUM_CELLS; i++) {
+  for (int i = 0; i < NUM_CELLS; i++) {
     cells[i].tapShow();
   }
   FastLED.show();
