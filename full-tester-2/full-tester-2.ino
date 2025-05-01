@@ -1,75 +1,136 @@
 //Constants
 #include <FastLED.h>
+#include <PeakDetection.h>
 #define NUM_CELLS 15
-#define NUM_LEDS NUM_CELLS*4
+#define NUM_LEDS NUM_CELLS * 4
 #define DATA_PIN 2
 //#define threshold 20
 
 //LED Strip Object
 CRGB leds[NUM_LEDS];
 
+// PeakDetection object
+// PeakDetection peakDetection;
+
 //Object for the Cells
+// struct Cell {
+//   int button; //pin for the velostat
+//   unsigned long baselineSum;
+//   int baseline;
+//   int ledIndex; //first index of leds
+//   int reading = 0; //latest velostat reading
+//   int smoothedReading = 0;
+//   int threshold; //The threshold is dynamic
+//   int peak = baseline + 5;
+
+//   int brightness = 0; //brightness value used in tapShow method
+
+//   //Initializes the cell
+//   void create(int velostatPin, int ledIndexStart) {
+//     button = velostatPin;
+//     ledIndex = ledIndexStart;
+//   }
+
+//   //Calculates the baseline reading value
+//   void calibrate() {
+//     baselineSum = 0;
+//     for (int i = 0; i < 50; i++) {
+//       baselineSum += analogRead(button);
+//     }
+//     baseline = round(baselineSum/50);
+//     peak = baseline + 5;
+
+//     //Based on the baseline, calculate the appropriate threshold
+//     //The lower the baseline, the more sensitive the sensor is, so
+//     //the larger the threshold for an actual tap.
+//     threshold = map(baseline, 0, 1023, 25, 1);
+//   }
+
+//   void readVelostat() {
+//     reading = analogRead(button);
+//     smoothedReading = smoothedReading*0.9 + reading*0.1;
+
+//     if(reading > peak) {
+//       peak = reading;
+//       int travel = peak - baseline;
+//       //float percentageOfTravelToTrigger = ;
+//       int newThreshold = round(travel*map(travel, 0, 1023, 5, 95)/100);
+//       if(newThreshold > threshold) {
+//         threshold = newThreshold;
+//       }
+//     }
+//   }
+
+//   void tapShow() {
+//     readVelostat();
+
+//     if ( millis() % 50 ) {
+//       if (reading > baseline + threshold) {
+//         brightness++;
+//       } else {
+//         brightness--;
+//       }
+//     }
+
+//     brightness = constrain(brightness, 0, 255);
+//     for ( int i = 0; i < 4; i++) {
+//       leds[ledIndex + i] = CRGB(brightness, 0, brightness);
+//     }
+//   }
+// };
+
 struct Cell {
-  int button; //pin for the velostat
+  int button;
   unsigned long baselineSum;
   int baseline;
-  int ledIndex; //first index of leds
-  int reading = 0; //latest velostat reading
+  int ledIndex;
+  int reading = 0;
   int smoothedReading = 0;
-  int threshold; //The threshold is dynamic
-  int peak = baseline + 5;
+  int brightness = 0;
 
-  int brightness = 0; //brightness value used in tapShow method
+  PeakDetection peakDetection;  // ← ADD THIS
 
-  //Initializes the cell
   void create(int velostatPin, int ledIndexStart) {
     button = velostatPin;
     ledIndex = ledIndexStart;
   }
 
-  //Calculates the baseline reading value
   void calibrate() {
     baselineSum = 0;
     for (int i = 0; i < 50; i++) {
       baselineSum += analogRead(button);
     }
-    baseline = round(baselineSum/50);
-    peak = baseline + 5;
+    baseline = round(baselineSum / 50);
 
-    //Based on the baseline, calculate the appropriate threshold
-    //The lower the baseline, the more sensitive the sensor is, so
-    //the larger the threshold for an actual tap.
-    threshold = map(baseline, 0, 1023, 25, 1);
+    // Dynamically derive parameters from the baseline
+    int lag = map(baseline, 0, 1023, 10, 30);                  // Shorter lag = more responsiveness for low baseline
+    int threshold = map(baseline, 0, 1023, 3, 1);              // Lower baseline → higher sensitivity
+    float influence = map(baseline, 0, 1023, 50, 90) / 100.0;  // Map to 0.5–0.9
+
+    peakDetection.begin(lag, threshold, influence);
   }
 
-  void readVelostat() {
-    reading = analogRead(button);
-    smoothedReading = smoothedReading*0.9 + reading*0.1;
-
-    if(reading > peak) {
-      peak = reading;
-      int travel = peak - baseline;
-      //float percentageOfTravelToTrigger = ;
-      int newThreshold = round(travel*map(travel, 0, 1023, 5, 95)/100);
-      if(newThreshold > threshold) {
-        threshold = newThreshold;
-      }
-    }
-  }
 
   void tapShow() {
-    readVelostat();
-    
-    if ( millis() % 50 ) {
-      if (reading > baseline + threshold) {
-        brightness++;
-      } else {
-        brightness--;
-      }
+    reading = analogRead(button);
+    if (smoothedReading == 0) {
+      smoothedReading = reading;
+    } else {
+      smoothedReading = smoothedReading * 0.9 + reading * 0.1;
+    }
+
+    double norm = constrain((double)(smoothedReading - baseline) / 512.0, -1.0, 1.0);  // Normalize
+    peakDetection.add(norm);
+    int peak = peakDetection.getPeak();
+
+    if (peak == 1) {
+      brightness += 20;  // Boost on positive peak
+    } else {
+      brightness -= 5;  // Fade otherwise
     }
 
     brightness = constrain(brightness, 0, 255);
-    for ( int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++) {
       leds[ledIndex + i] = CRGB(brightness, 0, brightness);
     }
   }
@@ -94,12 +155,12 @@ int debugging = 0;
 
 void loop() {
   //Light color testing
-//    for ( int i = 0; i < NUM_LEDS; i++) {
-//      leds[i] = CRGB(255, 0, 255);
-//    }
+  //    for ( int i = 0; i < NUM_LEDS; i++) {
+  //      leds[i] = CRGB(255, 0, 255);
+  //    }
 
-  for ( int i = 0; i < NUM_CELLS; i++) {
-   cells[i].tapShow();
+  for (int i = 0; i < NUM_CELLS; i++) {
+    cells[i].tapShow();
   }
   FastLED.show();
   //Serial.println();
@@ -117,11 +178,11 @@ void loop() {
   }
 
   Serial.println(cells[debugging].smoothedReading);
-//  Serial.print(cells[debugging].reading);
-//  Serial.print(',');
-//  Serial.print(cells[debugging].baseline + cells[debugging].threshold);
-//  Serial.print(',');
-//  Serial.println(cells[debugging].baseline);
+  //  Serial.print(cells[debugging].reading);
+  //  Serial.print(',');
+  //  Serial.print(cells[debugging].baseline + cells[debugging].threshold);
+  //  Serial.print(',');
+  //  Serial.println(cells[debugging].baseline);
 }
 
 void calibrationSequence() {
