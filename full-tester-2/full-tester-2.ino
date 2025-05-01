@@ -115,11 +115,15 @@ struct Cell {
   void tapShow() {
     readVelostat();
 
-    if (millis() % 50) {
+    if ( millis() % 100 ) {
       if (debouncedBinary > 0) {
-        brightness = qadd8(brightness, 1);
+        if(brightness >180) {
+          brightness = qsub8(brightness, 100);
+        }else {
+          brightness = qsub8(brightness, 5);
+        }
       } else {
-        brightness = qsub8(brightness, 1);
+        brightness = qadd8(brightness, 1); 
       }
     }
 
