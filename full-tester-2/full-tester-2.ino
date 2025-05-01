@@ -3,10 +3,29 @@
 #define NUM_CELLS 15
 #define NUM_LEDS NUM_CELLS*4
 #define DATA_PIN 2
-//#define threshold 20
+
+#define MSPERBEAT 500
+#define LEEWAY 100
 
 //LED Strip Object
 CRGB leds[NUM_LEDS];
+
+int defaultDeviations[] = {
+  0,
+  0,
+  23,
+  11,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+};
 
 //Object for the Cells
 struct Cell {
@@ -16,15 +35,26 @@ struct Cell {
   int ledIndex; //first index of leds
   int reading = 0; //latest velostat reading
   int smoothedReading = 0;
-  int threshold; //The threshold is dynamic
-  int peak = baseline + 5;
+  int binary = 0;
+  int lastBinary = 0;
+  int debouncedBinary = 0;
+  int deviation = 10; //Calculated based on the baseline
+  unsigned long lastDebounceTime = 0;
+  unsigned long hits[4] = {0, 0, 0, 0};
+  int hitCount = 0;
+  int currentPattern = 0;
+  CRGB cellColor = CRGB(200, 255, 116);
 
-  int brightness = 0; //brightness value used in tapShow method
+  uint8_t brightness = 128; //brightness value used in tapShow method
 
   //Initializes the cell
   void create(int velostatPin, int ledIndexStart) {
     button = velostatPin;
     ledIndex = ledIndexStart;
+
+    for ( int i = 0; i < 4; i++) {
+      leds[ledIndex + i] = cellColor;
+    }
   }
 
   //Calculates the baseline reading value
@@ -33,44 +63,91 @@ struct Cell {
     for (int i = 0; i < 50; i++) {
       baselineSum += analogRead(button);
     }
-    baseline = round(baselineSum/50);
-    peak = baseline + 5;
+    baseline = round(baselineSum / 50);
 
-    //Based on the baseline, calculate the appropriate threshold
+    //Based on the baseline, calculate the appropriate deviation
     //The lower the baseline, the more sensitive the sensor is, so
     //the larger the threshold for an actual tap.
-    threshold = map(baseline, 0, 1023, 25, 1);
+    deviation = map(baseline, 0, 1023, 20, 8);
+    
+    for(int i = 0; i<4; i++) {
+      hits[i] = 0;
+    }
   }
 
   void readVelostat() {
     reading = analogRead(button);
-    smoothedReading = smoothedReading*0.9 + reading*0.1;
+    smoothedReading = smoothedReading * 0.9 + reading * 0.1;
 
-    if(reading > peak) {
-      peak = reading;
-      int travel = peak - baseline;
-      //float percentageOfTravelToTrigger = ;
-      int newThreshold = round(travel*map(travel, 0, 1023, 5, 95)/100);
-      if(newThreshold > threshold) {
-        threshold = newThreshold;
+    if (reading - smoothedReading > deviation) {
+      //Peaking
+      binary = 1;
+    } else {
+      //Not peaking
+      binary = 0;
+    }
+
+    //debounce binary
+    if (binary != lastBinary) {
+      lastDebounceTime = millis();
+    }
+
+    if ((millis() - lastDebounceTime) > 80) {
+      // if the button state has changed:
+      if (binary != debouncedBinary) {
+        debouncedBinary = binary;
+
+        if (binary == 1) { //Its a hit
+          //Add to hits and shift it back
+          for (int i = 0; i < 3; i++) {
+            hits[i] = hits[i + 1];
+          }
+          hits[3] = millis();
+
+          checkRhythm();
+        }
       }
     }
+
+    lastBinary = binary;
   }
 
   void tapShow() {
     readVelostat();
-    
+
     if ( millis() % 50 ) {
-      if (reading > baseline + threshold) {
-        brightness++;
+      if (debouncedBinary > 0) {
+        brightness = qadd8(brightness, 1); 
       } else {
-        brightness--;
+        brightness = qsub8(brightness, 1); 
       }
     }
 
     brightness = constrain(brightness, 0, 255);
     for ( int i = 0; i < 4; i++) {
-      leds[ledIndex + i] = CRGB(brightness, 0, brightness);
+      leds[ledIndex + i] = cellColor;
+      leds[ledIndex + i].nscale8(brightness);
+    }
+  }
+
+  void checkRhythm() {
+    if ( hits[0] != 0 && hits[1] != 0 && hits[2] != 0 && hits[3] != 0 ) {
+      if (isPatternOne()) {
+        currentPattern = 1;
+        cellColor = CRGB(0,255,0);
+      }
+      
+    }
+  }
+
+  boolean isPatternOne() {
+    if ( (hits[1] - hits[0]) - MSPERBEAT < LEEWAY &&
+         (hits[2] - hits[1]) - MSPERBEAT < LEEWAY &&
+         (hits[3] - hits[2]) - MSPERBEAT < LEEWAY
+       ) {
+      return true;
+    }else {
+      return false;
     }
   }
 };
@@ -81,25 +158,29 @@ Cell cells[NUM_CELLS];
 void setup() {
   Serial.begin(9600);
   FastLED.addLeds<WS2815, DATA_PIN>(leds, NUM_LEDS);  // GRB ordering is assumed
-
+  FastLED.setBrightness(255);
   //Add the cells to the array and find baseline reading
   for (int i = 0; i < NUM_CELLS; i++) {
     pinMode(54 + i, INPUT);
     cells[i].create(54 + i, i * 4);
     cells[i].calibrate();
   }
+
+  cells[2].deviation = defaultDeviations[2];
+  cells[3].deviation = defaultDeviations[3];
+  //cells[4].deviation = defaultDeviations[2];
 }
 
 int debugging = 0;
 
 void loop() {
   //Light color testing
-//    for ( int i = 0; i < NUM_LEDS; i++) {
-//      leds[i] = CRGB(255, 0, 255);
-//    }
+  //    for ( int i = 0; i < NUM_LEDS; i++) {
+  //      leds[i] = CRGB(255, 0, 255);
+  //    }
 
   for ( int i = 0; i < NUM_CELLS; i++) {
-   cells[i].tapShow();
+    cells[i].tapShow();
   }
   FastLED.show();
   //Serial.println();
@@ -116,12 +197,20 @@ void loop() {
     }
   }
 
-  Serial.println(cells[debugging].smoothedReading);
-//  Serial.print(cells[debugging].reading);
-//  Serial.print(',');
-//  Serial.print(cells[debugging].baseline + cells[debugging].threshold);
-//  Serial.print(',');
-//  Serial.println(cells[debugging].baseline);
+  //Serial.print(cells[debugging].debouncedBinary * 1023); //blue
+  //Serial.print(',');
+  //Serial.print(cells[debugging].smoothedReading); // red
+  //Serial.print(',');
+  //Serial.print(cells[debugging].reading); //green
+  //Serial.print(',');
+  //orange
+  //Serial.println(cells[debugging].deviation);
+  for (int i = 0; i < 4; i++) {
+    Serial.print(',');
+    Serial.print(cells[debugging].hits[i]);
+  }
+  Serial.println();
+  //Serial.println(cells[debugging].currentPattern);
 }
 
 void calibrationSequence() {
