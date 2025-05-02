@@ -138,19 +138,19 @@ struct Cell {
     if (hits[0] != 0 && hits[1] != 0 && hits[2] != 0 && hits[3] != 0) {
       if (isPatternOne()) {
         currentPattern = 1;
-        cellColor = CRGB(0, 255, 0);
+        cellColor = CRGB(100, 0, 255); //blue
       }
       else if (isPatternTwo()) {
         currentPattern = 2;
-        cellColor = CRGB(255, 0, 0);
+        cellColor = CRGB(0, 150, 200); //purple
       }
       else if (isPatternThree()) {
         currentPattern = 3;
-        cellColor = CRGB(0, 0, 200);
+        cellColor = CRGB(255, 0, 80); //green
       }
       else if (isPatternFour()) {
         currentPattern = 4;
-        cellColor = CRGB(255, 0, 200);
+        cellColor = CRGB(100, 255, 0); //orange
       }
     }
   }
@@ -208,7 +208,7 @@ struct Cell {
 Cell cells[NUM_CELLS];
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
   FastLED.addLeds<WS2815, DATA_PIN>(leds, NUM_LEDS);  // GRB ordering is assumed
   FastLED.setBrightness(255);
   //Add the cells to the array and find baseline reading
@@ -220,7 +220,6 @@ void setup() {
 
   cells[2].deviation = defaultDeviations[2];
   cells[3].deviation = defaultDeviations[3];
-  //cells[4].deviation = defaultDeviations[2];
 }
 
 int debugging = 0;
@@ -235,34 +234,25 @@ void loop() {
     cells[i].tapShow();
   }
   FastLED.show();
-  //Serial.println();
 
 
   //Set the cell being debugged
-  if (Serial.available()) {
-    int input = Serial.parseInt();
-    while (Serial.available() > 0) {
-      Serial.read();
-    }
-    if (input >= 0 && input <= 14) {
-      debugging = input;
-    }
-  }
+//  if (Serial.available()) {
+//    int input = Serial.parseInt();
+//    while (Serial.available() > 0) {
+//      Serial.read();
+//    }
+//    if (input >= 0 && input <= 14) {
+//      debugging = input;
+//    }
+//  }
 
-  //Serial.print(cells[debugging].debouncedBinary * 1023); //blue
-  //Serial.print(',');
-  //Serial.print(cells[debugging].smoothedReading); // red
-  //Serial.print(',');
-  //Serial.print(cells[debugging].reading); //green
-  //Serial.print(',');
-  //orange
   //Serial.println(cells[debugging].deviation);
-  for (int i = 0; i < 4; i++) {
-    Serial.print(',');
-    Serial.print(cells[debugging].hits[i]);
-  }
-  Serial.println();
-  //Serial.println(cells[debugging].currentPattern);
+//  for (int i = 0; i < 4; i++) {
+//    Serial.print(',');
+//    Serial.print(cells[debugging].hits[i]);
+//  }
+//  Serial.println();
 }
 
 void calibrationSequence() {
