@@ -47,6 +47,7 @@ struct Cell {
   int currentPattern = 0;
   CRGB cellColor = CRGB(200, 255, 116);
   int repeatedPatternCount = 0;
+  float strengthOfMemory = 0;
 
   uint8_t brightness = 128;  //brightness value used in tapShow method
 
@@ -143,7 +144,7 @@ struct Cell {
         if(currentPattern == 1 ){
           repeatedPatternCount++;
         }else {
-          repeatedPatternCount = 0;
+          repeatedPatternCount = 1;
         }
         
         currentPattern = 1;
@@ -153,7 +154,7 @@ struct Cell {
         if(currentPattern == 2 ){
           repeatedPatternCount++;
         }else {
-          repeatedPatternCount = 0;
+          repeatedPatternCount = 1;
         }
         
         currentPattern = 2;
@@ -163,7 +164,7 @@ struct Cell {
         if(currentPattern == 3 ){
           repeatedPatternCount++;
         }else {
-          repeatedPatternCount = 0;
+          repeatedPatternCount = 1;
         }
         
         currentPattern = 3;
@@ -173,7 +174,7 @@ struct Cell {
         if(currentPattern == 4 ){
           repeatedPatternCount++;
         }else {
-          repeatedPatternCount = 0;
+          repeatedPatternCount = 1;
         }
         
         currentPattern = 4;
@@ -233,12 +234,13 @@ struct Cell {
 
   void forgetIfNeeded() {
     repeatedPatternCount = constrain(repeatedPatternCount, 0, 4);
-    float strengthOfMemory = repeatedPatternCount/4; //percentage
+    strengthOfMemory = repeatedPatternCount/4; //percentage
     
     //If its time for the cell to forget
-    if( millis() - hits[3] > round(maxMemoryDuration*strengthOfMemory) ){
-      cellColor = CRGB(200, 255, 116);
-    }
+//    if( repeatedPatternCount > 0 && millis() - hits[3] > round(maxMemoryDuration*strengthOfMemory) ){
+//      cellColor = CRGB(200, 255, 116);
+//      repeatedPatternCount = 0;
+//    }
   }
 };
 
@@ -246,7 +248,7 @@ struct Cell {
 Cell cells[NUM_CELLS];
 
 void setup() {
-  //Serial.begin(9600);
+  Serial.begin(9600);
   FastLED.addLeds<WS2815, DATA_PIN>(leds, NUM_LEDS);  // GRB ordering is assumed
   FastLED.setBrightness(255);
   //Add the cells to the array and find baseline reading
@@ -291,6 +293,9 @@ void loop() {
 //    Serial.print(cells[debugging].hits[i]);
 //  }
 //  Serial.println();
+    Serial.print(cells[10].repeatedPatternCount);
+    Serial.print(',');
+    Serial.println(cells[10].strengthOfMemory);
 }
 
 void calibrationSequence() {
