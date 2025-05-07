@@ -7,6 +7,8 @@
 #define MSPERBEAT 500
 #define LEEWAY 300
 
+const long maxMemoryDuration = 120000; //5min 300000
+
 //LED Strip Object
 CRGB leds[NUM_LEDS];
 
@@ -44,6 +46,7 @@ struct Cell {
   int hitCount = 0;
   int currentPattern = 0;
   CRGB cellColor = CRGB(200, 255, 116);
+  int repeatedPatternCount = 0;
 
   uint8_t brightness = 128;  //brightness value used in tapShow method
 
@@ -114,7 +117,7 @@ struct Cell {
 
   void tapShow() {
     readVelostat();
-
+    forgetIfNeeded();
     if ( millis() % 100 ) {
       if (debouncedBinary > 0) {
         if(brightness >180) {
@@ -137,23 +140,48 @@ struct Cell {
   void checkRhythm() {
     if (hits[0] != 0 && hits[1] != 0 && hits[2] != 0 && hits[3] != 0) {
       if (isPatternOne()) {
+        if(currentPattern == 1 ){
+          repeatedPatternCount++;
+        }else {
+          repeatedPatternCount = 0;
+        }
+        
         currentPattern = 1;
         cellColor = CRGB(100, 0, 255); //blue
       }
       else if (isPatternTwo()) {
+        if(currentPattern == 2 ){
+          repeatedPatternCount++;
+        }else {
+          repeatedPatternCount = 0;
+        }
+        
         currentPattern = 2;
         cellColor = CRGB(0, 150, 200); //purple
       }
       else if (isPatternThree()) {
+        if(currentPattern == 3 ){
+          repeatedPatternCount++;
+        }else {
+          repeatedPatternCount = 0;
+        }
+        
         currentPattern = 3;
         cellColor = CRGB(255, 0, 80); //green
       }
       else if (isPatternFour()) {
+        if(currentPattern == 4 ){
+          repeatedPatternCount++;
+        }else {
+          repeatedPatternCount = 0;
+        }
+        
         currentPattern = 4;
         cellColor = CRGB(100, 255, 0); //orange
       }
     }
   }
+  
   // hit 1, hit 2, hit 3, hit 4
   boolean isPatternOne() {
     if (
@@ -200,6 +228,16 @@ struct Cell {
       return true;
     } else {
       return false;
+    }
+  }
+
+  void forgetIfNeeded() {
+    repeatedPatternCount = constrain(repeatedPatternCount, 0, 4);
+    float strengthOfMemory = repeatedPatternCount/4; //percentage
+    
+    //If its time for the cell to forget
+    if( millis() - hits[3] > round(maxMemoryDuration*strengthOfMemory) ){
+      cellColor = CRGB(200, 255, 116);
     }
   }
 };
